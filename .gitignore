@@ -3,3 +3,7 @@
 .RData
 .Ruserdata
 private
+
+# Ignore all folders and files containing "cache" or "cached" 
+**/*cache*
+**/*cached*

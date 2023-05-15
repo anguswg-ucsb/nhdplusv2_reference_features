@@ -1,0 +1,270 @@
+---
+title: "01 - Flowlines"
+author: "Angus Watters"
+date: "2023-05-13"
+output:
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+library(ggmapinset)
+library(sf)
+library(ggplot2)
+library(dplyr)
+library(sfheaders)
+library(hydrofab)
+
+knitr::opts_chunk$set(echo = TRUE)
+options(warn = -1, verbose = FALSE)
+source("../nhdplusv2/utils.R")
+
+# getting VAA from NHDPlus
+vaa <- nhdplusTools::get_vaa()
+
+# new attributes
+new_atts = read_parquet("D:/nhdplusv2_reference_features/enhd_nhdplusatts.parquet")
+# new_atts = read_parquet(glue("{base_dir}/enhd_nhdplusatts.parquet"))
+
+# Get the current flowline path
+fl_path <- "D:/nhdplusv2_reference_features/02_Flowlines/NHDPlus06.gpkg"
+
+ble_path <- "D:/nhdplusv2_reference_features/02_BLE/NHDPlus06.gpkg"
+
+# Get the VPU identifier for the current flowline file
+# which_VPU = gsub(".gpkg", "", gsub("NHDPlus", "", basename(fl_path)))
+
+# # Get the BLE path for the current VPU
+# ble_path  = ble_paths[grep(which_VPU, basename(ble_paths))]
+# 
+# # Define the output file path for the processed flowlines
+# outfile   = glue("{reference_dir}flowlines_{which_VPU}.gpkg")
+
+# inset map point
+lng = c(-84.17691)
+lat = c(35.15163)
+
+pt <-   data.frame(lng = lng, 
+                   lat = lat
+                   ) %>% 
+  sf::st_as_sf( coords = c("lng", "lat"), crs = 4326) %>% 
+  sf::st_geometry() %>% 
+  sf::st_centroid()
+
+# ggplot theme 
+thm <- 
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    plot.title = ggplot2::element_text(size = 16, face = "bold", hjust = 0.5),
+    plot.subtitle =  ggplot2::element_text(size = 14, hjust = 0.5)
+  )
+
+group_colors <- c(
+  "19485688" = "#00BA38",
+  "19485662" = "#F8766D",
+  "19485570" = "#619CFF"
+  )
+```
+
+The goal of this step in generating a new and improved NHDPlus dataset is to rectify missing attributes in NHDPlus flowlines and resolve network connectivity issues. 
+
+To show what we did, we will walk through an example of our process on VPU 6. 
+
+<br>
+<br>
+
+# 1. Read in NHDPlus flowlines
+
+We first read in our original NHDPlus flowlines dataset, drop any Z/M dimensions, and align our columns with the NHDPlus names.
+
+```{r, eval = T, echo = T}
+# read in flowlines
+nhd <- sf::read_sf(fl_path)
+
+# remove Z/M dimensions and align names
+nhd <- 
+  nhd %>% 
+  sf::st_zm() %>%
+  nhdplusTools::align_nhdplus_names()
+```
+
+<br>
+<br>
+
+# 2. Join with VAA and E2NHD 
+
+We have 2 sets of attribute data that we want to join and with `nhd`:
+
+1. Value Added Attribute set. 
+2. Updated network attributes from E2NHD https://doi.org/10.5066/P9W79I7Q
+
+Here is a list of the attributes in the the Value Added Attributes dataset
+```{r}
+# getting VAA from NHDPlus
+vaa <- nhdplusTools::get_vaa()
+
+names(vaa)
+```
+
+And these are the attributes in the E2NHD.
+```{r}
+# new attributes
+new_atts <- arrow::read_parquet("D:/nhdplusv2_reference_features/enhd_nhdplusatts.parquet")
+
+names(new_atts)
+```
+
+We first join `vaa` with `nhd` to attach network connectivty information to each of the flowlines COMIDs (i.e. from/to nodes, start flag, stream calc #)
+
+```{r, eval = TRUE, echo = T}
+nhd <-
+  nhd %>% 
+  dplyr::left_join(
+    vaa, 
+    by = c("COMID" = "comid")
+    ) %>%
+  dplyr::select(COMID, fromnode, tonode, startflag, streamcalc, divergence, dnminorhyd)
+```
+
+<br>
+
+We then join the `nhd` dataset with the `new_atts` from E2NHD which contain improved network connectivity information. For more information visit https://doi.org/10.5066/P9W79I7Q. We also realign the names to match the NHDPlus names, and recalculate the flowline lengths. 
+
+```{r, eval = TRUE, echo = T}
+nhd <-
+  nhd %>% 
+  dplyr::left_join(
+    new_atts,
+    by = c("COMID" = "comid")
+    ) %>%
+  nhdplusTools::align_nhdplus_names() %>%
+  dplyr::mutate(LENGTHKM  = add_lengthkm(.))
+```
+
+Now we have a NHDPlus flowlines with the necessary attributes.
+
+<br>
+<br>
+
+# 3. Burn Lines
+
+Next thing to do is get our Burn lines data (`ble`), and rename the `LineID` column to `COMID`.
+
+```{r, eval = TRUE, echo = T}
+# Read the BLE file and perform some preprocessing steps
+ble <- sf::read_sf(ble_path) 
+
+# rename LineID column to COMID
+ble <- dplyr::rename(ble, COMID = LineID)
+
+ble
+```
+
+<br>
+<br>
+
+# 4. Join Burn Lines data with `nhd data`
+We then join our the burn line multilinestring geometries with the `nhd` flowlines COMIDs. We also drop any Z/M dimensions. Once we have done this, we are left with `ble` data that uses the burn line multilinestring as the geometries for any matching COMIDs, all other geometries will be represented by empty geometries.
+
+<br>
+
+In our example, all of the geometries are empty (i.e. There are no COMIDs in `ble` that match COMIDs in `nhd`)
+```{r}
+# Join the NHDPlus flowlines with the BLE lines where applicable
+ble <- 
+  dplyr::left_join(
+    dplyr::select(sf::st_drop_geometry(nhd), COMID), 
+    ble, 
+    by = "COMID"
+  ) %>%
+  sf::st_as_sf() %>%
+  sf::st_zm()
+```
+
+<br>
+
+ We then create a `flag` for non empty geometries, where the `nhd` data has a `startFlag` equal to 1 or a `Divergence` equal to 2. This flag indicates where to use the burn line geometries.
+ 
+```{r, eval = TRUE, echo = TRUE}
+# Define a flag to indicate where the BLE lines will be used
+flag <- !sf::st_is_empty(sf::st_geometry(ble)) & (nhd$StartFlag == 1 | nhd$Divergence == 2)
+```
+
+```{r, eval = TRUE, echo = TRUE}
+table(flag)
+```
+
+In our example, all flowlines where flagged as FALSE for these conditions.
+
+<br>
+<br>
+
+# 5. Replace any flagged geometries with burn line geometries
+We then replace any geometries in `nhd` with the burn line multilinestrings that were flagged as non empty start flags or divergences.  
+```{r, eval = TRUE, echo = TRUE}
+# Replace the flowline geometry with the BLE line geometry where applicable
+sf::st_geometry(nhd)[flag] <- sf::st_geometry(ble)[flag]
+```
+
+<br>
+<br>
+
+# 6. Create a custom network
+Using our `nhd` data, we use our `FromNode` and `ToNode` for each COMID to get a corrected `tocomid` that we will use to override the current `nhd` `toCOMID` data.
+```{r, eval = TRUE, echo = TRUE}
+# Generate a custom network for the flowlines based on the override_tocomid values
+custom_net <- 
+  nhd %>% 
+  sf::st_drop_geometry() %>%
+  dplyr::select(COMID, FromNode, ToNode, Divergence) %>%
+  nhdplusTools::get_tocomid(remove_coastal = FALSE) %>%
+  dplyr::select(comid, override_tocomid = tocomid)
+```
+
+<br>
+
+We then join this `custom_net` with our `nhd` data by COMID to add the `override_tocomid` column to our original data. We then update the `override_tocomid` data by setting the value to the `override_tocomid` from the `custom_net` if the `toCOMID` value equals 0, otherwise we just keep the original `toCOMID` COMID value.
+```{r, eval = TRUE, echo = TRUE}
+# Update the override_tocomid values to account for nodes with no downstream flow
+nhd <- 
+  dplyr::left_join(
+    nhd, 
+    custom_net, 
+    by = c("COMID" = "comid")
+  ) %>%
+  dplyr::mutate(
+    override_tocomid = ifelse(toCOMID == 0, override_tocomid, toCOMID)
+  )
+```
+
+
+```{r, eval = TRUE, echo = TRUE}
+# Check for any invalid override_tocomid values, that each flowline is a headwater and leads somewhere
+check <- !nhd$COMID %in% nhd$override_tocomid &
+  !(nhd$override_tocomid == 0 | is.na(nhd$override_tocomid) |
+      !nhd$override_tocomid %in% nhd$COMID)
+
+# Filter the flowlines to only those with
+check_direction <- filter(nhd, check)
+```
+
+
+<br>
+<br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

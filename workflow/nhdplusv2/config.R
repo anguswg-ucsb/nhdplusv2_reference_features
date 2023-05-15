@@ -1,6 +1,6 @@
 pacman::p_load(hydrofabric, logger,   archive, 
                aws.s3,      sbtools,  sfheaders,   
-               parallel, pbapply,  arrow,       nngeo)
+               parallel, pbapply,  arrow,  nngeo, rmapshaper)
 
 source("workflow/nhdplusv2/utils.R")
 source("workflow/nhdplusv2/root_dir.R")
@@ -30,7 +30,14 @@ final_dir  = glue('{base_dir}/reference_features/')
 
 dir.create(epa_download,   showWarnings = FALSE)
 dir.create(catchments_dir, showWarnings = FALSE)
-dir.create(cleaned_dir,    showWarnings = FALSE)
+# dir.create(cleaned_dir,    showWarnings = FALSE)
+
+# added safety check to not lose progress on cleaning catchments...
+if (!dir.exists(cleaned_dir)) {
+  # if (!dir.exists(cleaned_dir) & length(list.files(cleaned_dir)) > 0) {
+  dir.create(cleaned_dir,    showWarnings = FALSE)
+}
+
 dir.create(fl_dir,         showWarnings = FALSE)
 dir.create(wb_dir,         showWarnings = FALSE)
 dir.create(ble_dir,        showWarnings = FALSE)

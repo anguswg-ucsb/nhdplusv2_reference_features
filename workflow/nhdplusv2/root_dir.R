@@ -1,3 +1,3 @@
 ### EDIT ###
-base_dir   = '/Volumes/Transcend/reference_geometries'
+base_dir   = "D:/nhdplusv2_reference_features"
 ### EDIT ###
