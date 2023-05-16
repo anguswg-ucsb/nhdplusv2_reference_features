@@ -37,7 +37,8 @@ group_colors <- c(
   # "19750735" = "gold",
   # "19750785" = "midnightblue",
     "19485662" = "#F8766D",
-  "19485570" = "#619CFF"
+  "19485570" = "#619CFF",
+  "Border"   = "red"
   # "19750745" ="#F8766D"
                   )
 
@@ -595,7 +596,6 @@ ints =
   dplyr::slice_max(.data$l, with_ties = FALSE) %>%
   dplyr::ungroup()
 
-ints
 ```
 
 ```{r, eval = FALSE, echo = FALSE}
@@ -687,5 +687,465 @@ ggplot2::ggsave(
 <center>
 ![Final unionified catchment geometries](../img/final_catchment_union_plot.png)
 </center>
+
+
+
+```{r, eval = FALSE, echo = FALSE}
+# ----------------------------------------------
+# ---- CODE FOR MAKING CLEAN CATCHMENTS GIF ----
+# ----------------------------------------------
+
+start_poly <-
+  polygons %>% 
+  dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  ggplot2::scale_fill_manual(values=group_colors) +
+  ggplot2::labs(
+    fill = "Feature ID",
+    caption = "1 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+
+ggplot2::ggsave(
+  start_poly,
+  filename = "../img/01_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+
+highlight_poly <-
+polygons %>% 
+  dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  gghighlight::gghighlight(featureid == 19485570) + 
+  ggplot2::scale_fill_manual(values=group_colors) +
+  ggplot2::labs(
+    fill = "Feature ID",
+    caption = "2 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+
+ggplot2::ggsave(
+  highlight_poly,
+  filename = "../img/02_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+
+
+small_highlight <-
+  polygons %>% 
+  dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>%
+  dplyr::mutate(type = "bigs") %>% 
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_as_sf(sf::st_union(small_parts)),
+      featureid = "19485570",
+      type = "smalls"
+      ),
+      geometry = x
+      
+      )
+  ) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  ggplot2::scale_fill_manual(values=group_colors) +
+  gghighlight::gghighlight(type == "smalls") +
+  # ggplot2::geom_sf(data = small_parts, fill = "black") + 
+  ggplot2::labs(
+    fill = "Feature ID",
+    caption = "3 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+ggplot2::ggsave(
+  small_highlight,
+  filename = "../img/03_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+# plot(small_parts$geometry)
+
+int_line_plot <-
+  polygons %>% 
+  dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>%
+  dplyr::mutate(type = "bigs") %>%
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_as_sf(sf::st_union(small_parts)),
+      featureid = "19485570",
+      type = "smalls"
+      ),
+      geometry = x
+      )
+  ) %>%
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_cast(
+        sf::st_as_sf(
+        sf::st_buffer(sf::st_union(ints), 5)
+        ), "MULTIPOLYGON"
+        ),
+      featureid = "Border",
+      type = "border"
+      ),
+      geometry = x
+      )
+    ) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  # ggplot2::geom_sf(data = ints, color = "red", lwd = 1) +
+  ggplot2::scale_fill_manual(values=group_colors) +
+  # gghighlight::gghighlight(featureid %in% c("19485570", "Border")) +
+  gghighlight::gghighlight(type %in% c("smalls", "border")) +
+  # ggplot2::geom_sf(data = small_parts, fill = "black") + 
+  ggplot2::labs(
+    fill = "Feature ID",
+    caption = "4 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+ggplot2::ggsave(
+  int_line_plot,
+  filename = "../img/04_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+
+big_small_plot <-
+  polygons %>% 
+  dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>%
+  dplyr::mutate(type = "bigs") %>%
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_as_sf(sf::st_union(small_parts)),
+      featureid = "19485570",
+      type = "smalls"
+      ),
+      geometry = x
+      )
+  ) %>%
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_cast(
+        sf::st_as_sf(
+        sf::st_buffer(sf::st_union(ints), 5)
+        ), "MULTIPOLYGON"
+        ),
+      featureid = "Border",
+      type = "border"
+      ),
+      geometry = x
+      )
+    ) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  # ggplot2::geom_sf(data = ints, color = "red", lwd = 1) +
+  ggplot2::scale_fill_manual(values=group_colors) +
+  # gghighlight::gghighlight(featureid %in% c("19485570", "Border")) +
+  gghighlight::gghighlight(type %in% c("smalls", "border") | featureid == 19485688) +
+  # ggplot2::geom_sf(data = small_parts, fill = "black") + 
+   ggplot2::labs(
+    fill = "Feature ID",
+    caption = "5 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+# 19485688
+ggplot2::ggsave(
+  big_small_plot,
+  filename = "../img/05_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+
+change_plot <-
+polygons %>% 
+  dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>%
+  dplyr::mutate(type = "bigs") %>%
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_as_sf(sf::st_union(small_parts)),
+      featureid = "19485688",
+      type = "smalls"
+      ),
+      geometry = x
+      )
+  ) %>%
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_cast(
+        sf::st_as_sf(
+        sf::st_buffer(sf::st_union(ints), 5)
+        ), "MULTIPOLYGON"
+        ),
+      featureid = "Border",
+      type = "border"
+      ),
+      geometry = x
+      )
+    ) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  # ggplot2::geom_sf(data = ints, color = "red", lwd = 1) +
+  ggplot2::scale_fill_manual(values=group_colors) +
+  # gghighlight::gghighlight(featureid %in% c("19485570", "Border")) +
+  gghighlight::gghighlight(type %in% c("smalls", "border") | featureid == 19485688) +
+  # ggplot2::geom_sf(data = small_parts, fill = "black") + 
+  ggplot2::labs(
+    fill = "Feature ID",
+    caption = "6 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+
+ggplot2::ggsave(
+  change_plot,
+  filename = "../img/06_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+
+third_to_final_plot <- 
+  polygons %>% 
+  dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>%
+  dplyr::mutate(type = "bigs") %>%
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_as_sf(sf::st_union(small_parts)),
+      featureid = "19485688",
+      type = "smalls"
+      ),
+      geometry = x
+      )
+  ) %>%
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  # ggplot2::geom_sf(data = ints, color = "red", lwd = 1) +
+  ggplot2::scale_fill_manual(values=group_colors) +
+  # gghighlight::gghighlight(featureid %in% c("19485570", "Border")) +
+  gghighlight::gghighlight(type %in% c("smalls", "border") | featureid == 19485688) +
+  # ggplot2::geom_sf(data = small_parts, fill = "black") + 
+  ggplot2::labs(
+    fill = "Feature ID",
+    caption = "7 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+
+ggplot2::ggsave(
+  third_to_final_plot,
+  filename = "../img/07_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+
+second_to_final <- 
+  polygons %>% 
+  dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>%
+  dplyr::mutate(type = "bigs") %>%
+  dplyr::bind_rows(
+    dplyr::rename(
+      dplyr::mutate(
+      sf::st_as_sf(sf::st_union(small_parts)),
+      featureid = "19485688",
+      type = "smalls"
+      ),
+      geometry = x
+      )
+  ) %>%
+  rmapshaper::ms_dissolve("featureid") %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  # ggplot2::geom_sf(data = ints, color = "red", lwd = 1) +
+  ggplot2::scale_fill_manual(values=group_colors) +
+  # gghighlight::gghighlight(featureid %in% c("19485570", "Border")) +
+  gghighlight::gghighlight( featureid == 19485688) +
+  # ggplot2::geom_sf(data = small_parts, fill = "black") + 
+  ggplot2::labs(
+    fill = "Feature ID",
+    caption = "8 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+
+ggplot2::ggsave(
+  second_to_final,
+  filename = "../img/08_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+
+final_gif_plot <- 
+  in_cat %>% 
+    dplyr::mutate(
+    featureid = as.character(featureid)
+  ) %>% 
+  ggplot2::ggplot() +
+  ggplot2::geom_sf(ggplot2::aes(fill = featureid)) +
+  ggplot2::scale_fill_manual(values = group_colors) + 
+  ggplot2::labs(
+    fill = "Feature ID",
+    caption = "9 / 9"
+  ) +
+  thm + 
+  ggplot2::theme(
+  legend.text = ggplot2::element_text(size = 12),
+  legend.title = ggplot2::element_text(face = "bold", size = 12),
+  plot.caption = ggplot2::element_text(size = 12, face="bold", hjust = 0.5),
+  # legend.justification=c(-0.7,-1),
+  # legend.position=c(0,0),
+  legend.background = ggplot2::element_rect(fill="transparent", size=.5, linetype="dotted")
+   # legend.spacing.x = unit(0.5, "cm")
+  )
+
+ggplot2::ggsave(
+  final_gif_plot,
+  filename = "../img/09_catchment_gif_plot.png",
+  height = 6,
+  width = 10,
+  scale = 1
+)
+
+# library(gifski)
+# png_files <- list.files("../img/", pattern = "_catchment_gif_plot", full.names = TRUE)
+# 
+# gifski::gifski(png_files, gif_file = "../gif/cleaning_catchments.gif", width = 1700, height = 1000, delay = 1.5)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
